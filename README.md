@@ -1,2 +1,2 @@
 # Machine-Learning
-Repository related to machine learning projects and related modules
+Repository related to machine learning theory and my progress
