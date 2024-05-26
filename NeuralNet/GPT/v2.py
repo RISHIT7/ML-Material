@@ -5,17 +5,16 @@ import torch.nn.functional as F
 # hyperparameters
 batch_size = 32 # how many independent samples to process at once
 block_size = 8 # the number of tokens in the input sequence
-max_iters = 500 # number of iterations to train for
-eval_interval = 300 # how often to evaluate the model
+max_iters = 3000
+eval_interval = 300
 learning_rate = 1e-2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-eval_iters = 200 # how many iterations to evaluate for
-n_embd = 32  # the size of the embedding dimension
+eval_iters = 200
+n_embd = 32
 # ------------------------------------------------------------------------------
 
-torch.manual_seed(1337) # for reproducibility
+torch.manual_seed(1337)
 
-# below is the link to the data
 # !wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
 with open(r".\NeuralNet\GPT\input.txt", 'r') as f:
     text = f.read()
@@ -39,9 +38,8 @@ val_data = data[n:]
 def get_batch(split):
     # generate a small batch of data of inputs x and targets y
     data = train_data if split == 'train' else val_data
-    # we want the high to be set to len(data) - block_size, to allow for the last target to be assigned
-    ix = torch.randint(len(data) - block_size, (batch_size,)) # list of random indices
-    x = torch.stack([data[i:i+block_size] for i in ix]) # [for i in ix] get's us the index, from which we extraxt block_size size of list
+    ix = torch.randint(len(data) - block_size, (batch_size,))
+    x = torch.stack([data[i:i+block_size] for i in ix])
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
     x, y = x.to(device), y.to(device)
     return x, y
@@ -49,56 +47,42 @@ def get_batch(split):
 @torch.no_grad()
 def estimate_loss(model):
     out = {}
-    model.eval() # model set to evaluation mode
+    model.eval()
     for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters) # zeros with len of iterations for which model is to be evaluated
+        losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
-            X, Y = get_batch(split) # get a random batch of data
+            X, Y = get_batch(split)
             _, loss = model(X, Y)
-            losses[k] = loss.item() # storing the loss item
-        out[split] = losses.mean() # calculating the mean of the losses
-    model.train() # model set to training mode
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
     return out
 
 # super simple bigram model
 torch.manual_seed(1337)
 
-class BigramLanguageModel(nn.Module): # inherting from nn.Module
+class BigramLanguageModel(nn.Module):
     
     def __init__(self):
-        super().__init__() # calling the parent class constructor
-        self.token_embedding_table = nn.Embedding(vocab_size, n_embd) # embedding table, for every token in the vocab, we have an embedding
-        self.position_embedding_table = nn.Embedding(block_size, n_embd) # position embedding table, for every position in the block, we have an embedding
-        # the above two embeddings are learned during training
-        # the below linear layer is the output layer
-        self.lm_head = nn.Linear(n_embd, vocab_size) # a linear layer that maps the embeddings to the vocab size
+        super().__init__()
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
+        self.position_embedding_table = nn.Embedding(block_size, n_embd)
+        self.lm_head = nn.Linear(n_embd, vocab_size)
     
     def forward(self, idx, targets = None):
-        B, T = idx.shape # batch_size, and block_size (context size)
-        # self.token_embedding_table(idx) returns the embeddings got the token in the context
-        # the call behaviour of embedding table is to apply the embedding to the input tensor
-
-        # def __call__(self, idx):
-            # self.weight has been initialized with dimension of (vocab_size, n_embd) in the constructor
-            # self.out = self.weight[idx]
-            # return self.out
-
-        # (B, T) -> idx -> (token encoding) -> self.weight -> embedding 
-        # thus the output of the below line is (B, T, token_embedding)
-        tok_emb = self.token_embedding_table(idx) # (B, T, token_embedding)
-        pos_emb = self.position_embedding_table(torch.arange(T, device = device)) # (T, position_embedding)
-        # mind that position_embedding.shape[-1] = token_embedding.shape[-1] in it's value, but the position_embedding is not learned, and the size is kept same for broadcasting purposes
+        B, T = idx.shape
+        
+        tok_emb = self.token_embedding_table(idx) # (B, T, C)
+        pos_emb = self.position_embedding_table(torch.arange(T, device = device)) # (T, C)
         # holds not just the token embeddings but also the positional embeddings
         x = tok_emb + pos_emb # (B, T, C)
         logits = self.lm_head(x) # (B, T, vocab_size)
         
-        # training mode
         if targets is None:
             loss = None
-        # evaluation mode
         else:
             B, T, C = logits.shape
-            logits = logits.view(B*T, C) # this is done for consistency, as the loss function expects a 2D tensor
+            logits = logits.view(B*T, C)
             targets = targets.view(B*T)
             loss = F.cross_entropy(logits, targets)
         
