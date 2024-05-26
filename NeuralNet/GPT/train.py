@@ -5,9 +5,10 @@ import torch.nn.functional as F
 # hyperparameters
 batch_size = 32 # how many independent samples to process at once
 block_size = 8 # the number of tokens in the input sequence
-max_iters = 500 # number of iterations to train for
+max_iters = 5000 # number of iterations to train for
 eval_interval = 300 # how often to evaluate the model
-learning_rate = 1e-2
+learning_rate = 1e-3
+head_size = 16 # the size of the attention head
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 eval_iters = 200 # how many iterations to evaluate for
 n_embd = 32  # the size of the embedding dimension
@@ -63,6 +64,35 @@ def estimate_loss(model):
 # super simple bigram model
 torch.manual_seed(1337)
 
+class MultiHeadAttention(nn.Module):
+    def __init__(self, num_heads, head_size):
+        super().__init__()
+        self.heads = nn.ModuleList((Head(head_size) for _ in range(num_heads)))
+    
+    def forward(self, x):
+        return torch.cat([h(x) for h in self.heads], dim = -1)
+
+class Head(nn.Module):
+    def __init__(self, head_size):
+        super().__init__()
+        self.key = nn.Linear(n_embd, head_size, bias = False)
+        self.query = nn.Linear(n_embd, head_size, bias = False)
+        self.value = nn.Linear(n_embd, head_size, bias = False)
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
+    
+    def forward(self, x):
+        B, T, C = x.shape
+        K = self.key(x)
+        Q = self.query(x)
+        V = self.value(x)
+        # compute attention scores ('affinities')
+        wei = Q @ K.transpose(-2, -1) * (C ** -0.5) # (B, T, T)
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # mask out the lower half of the matrix
+        wei = F.softmax(wei, dim = -1) # (B, T, T)
+        # apply the attention to the values
+        out = wei @ V # (B, T, head_size)
+        return out
+
 class BigramLanguageModel(nn.Module): # inherting from nn.Module
     
     def __init__(self):
@@ -72,6 +102,9 @@ class BigramLanguageModel(nn.Module): # inherting from nn.Module
         # the above two embeddings are learned during training
         # the below linear layer is the output layer
         self.lm_head = nn.Linear(n_embd, vocab_size) # a linear layer that maps the embeddings to the vocab size
+        # creating a head 
+        # self.sa_head = Head(n_embd) # self attention head
+        self.sa_head = MultiHeadAttention(num_heads = 4, head_size = n_embd // 4) # multihead attention head (4 heads, each with n_embd // 4 size
     
     def forward(self, idx, targets = None):
         B, T = idx.shape # batch_size, and block_size (context size)
@@ -90,6 +123,7 @@ class BigramLanguageModel(nn.Module): # inherting from nn.Module
         # mind that position_embedding.shape[-1] = token_embedding.shape[-1] in it's value, but the position_embedding is not learned, and the size is kept same for broadcasting purposes
         # holds not just the token embeddings but also the positional embeddings
         x = tok_emb + pos_emb # (B, T, C)
+        x = self.sa_head(x) # (B, T, head_size)
         logits = self.lm_head(x) # (B, T, vocab_size)
         
         # training mode
@@ -107,8 +141,10 @@ class BigramLanguageModel(nn.Module): # inherting from nn.Module
     def generate(self, idx, max_new_tokens):
         # idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
+            # crop idx to the last block_size tokens
+            idx_cond = idx[:, -block_size:]
             # get ther predictions
-            logits, loss = self(idx)
+            logits, _ = self(idx_cond)
             # focus only on the last time step
             logits = logits[:, -1, :] # becomes (B, C)
             # apply softmax to get probabilities
