@@ -16,7 +16,7 @@ n_embd = 32
 torch.manual_seed(1337)
 
 # !wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
-with open('./input.txt', 'r') as f:
+with open(r".\NeuralNet\GPT\input.txt", 'r') as f:
     text = f.read()
 
 # here are all the unique characters that occur in the text
@@ -48,7 +48,7 @@ def get_batch(split):
 def estimate_loss(model):
     out = {}
     model.eval()
-    for split in ['train', 'test']:
+    for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
@@ -66,11 +66,17 @@ class BigramLanguageModel(nn.Module):
     def __init__(self):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
+        self.position_embedding_table = nn.Embedding(block_size, n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size)
     
     def forward(self, idx, targets = None):
+        B, T = idx.shape
+        
         tok_emb = self.token_embedding_table(idx) # (B, T, C)
-        logits = self.lm_head(tok_emb) # (B, T, vocab_size)
+        pos_emb = self.position_embedding_table(torch.arange(T, device = device)) # (T, C)
+        # holds not just the token embeddings but also the positional embeddings
+        x = tok_emb + pos_emb # (B, T, C)
+        logits = self.lm_head(x) # (B, T, vocab_size)
         
         if targets is None:
             loss = None
