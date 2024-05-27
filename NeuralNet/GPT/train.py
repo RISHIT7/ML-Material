@@ -69,8 +69,9 @@ class FeedForward(nn.Module):
     def __init__(self, n_embd):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(n_embd, n_embd),
+            nn.Linear(n_embd, 4 * n_embd),
             nn.ReLU(),
+            nn.Linear(4 * n_embd, n_embd),
         )
     
     def forward(self, x):
@@ -80,9 +81,13 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList((Head(head_size) for _ in range(num_heads)))
+        self.proj = nn.Linear(n_embd, n_embd)
+        
     
     def forward(self, x):
-        return torch.cat([h(x) for h in self.heads], dim = -1)
+        out = torch.cat([h(x) for h in self.heads], dim = -1)
+        out = self.proj(out)
+        return out
 
 class Head(nn.Module):
     def __init__(self, head_size):
@@ -114,8 +119,8 @@ class Block(nn.Module):
         self.ffwd = FeedForward(n_embd)
     
     def forward(self, idx, targets = None):
-        x = self.sa(idx)
-        x = self.ffwd(x)
+        x = x + self.sa(idx)
+        x = x + self.ffwd(x)
         return x
 
 class BigramLanguageModel(nn.Module): # inherting from nn.Module
@@ -125,8 +130,14 @@ class BigramLanguageModel(nn.Module): # inherting from nn.Module
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd) # embedding table, for every token in the vocab, we have an embedding
         self.position_embedding_table = nn.Embedding(block_size, n_embd) # position embedding table, for every position in the block, we have an embedding
         # the above two embeddings are learned during training
-        # the below linear layer is the output layer
-        self.lm_head = nn.Linear(n_embd, vocab_size) # a linear layer that maps the embeddings to the vocab size
+        # below is the block Nx, of communication and computation
+        self.blocks = nn.Sequential(
+            Block(n_embd, n_head = 4),
+            Block(n_embd, n_head = 4),
+            Block(n_embd, n_head = 4)
+        )
+        # below is the output layer
+        self.lm_head = nn.Linear(n_embd, vocab_size) # linear layer to get the logits
         # creating a head 
         # self.sa_head = Head(n_embd) # self attention head
         self.sa_head = MultiHeadAttention(num_heads = 4, head_size = n_embd // 4) # multihead attention head (4 heads, each with n_embd // 4 size
