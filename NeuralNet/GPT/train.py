@@ -117,10 +117,15 @@ class Block(nn.Module):
         head_size = n_embd // n_head
         self.sa = MultiHeadAttention(n_head, head_size)
         self.ffwd = FeedForward(n_embd)
+        self.ln1 = nn.LayerNorm(n_embd)
+        self.ln2 = nn.LayerNorm(n_embd)
     
-    def forward(self, idx, targets = None):
-        x = x + self.sa(idx)
-        x = x + self.ffwd(x)
+    def forward(self, x, targets = None):
+        # here we deviate from the original implementation
+        # as we have applied the layer norm before the feed forard and self attention block
+        # this is a much more common practice these days
+        x = x + self.sa(self.ln1(x)) # residual connection
+        x = x + self.ffwd(self.ln2(x)) # residual connection
         return x
 
 class BigramLanguageModel(nn.Module): # inherting from nn.Module
@@ -134,7 +139,8 @@ class BigramLanguageModel(nn.Module): # inherting from nn.Module
         self.blocks = nn.Sequential(
             Block(n_embd, n_head = 4),
             Block(n_embd, n_head = 4),
-            Block(n_embd, n_head = 4)
+            Block(n_embd, n_head = 4),
+            nn.LayerNorm(n_embd)
         )
         # below is the output layer
         self.lm_head = nn.Linear(n_embd, vocab_size) # linear layer to get the logits
