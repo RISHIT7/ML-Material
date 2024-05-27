@@ -3,15 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # hyperparameters
-batch_size = 64 # how many independent samples to process at once
-block_size = 256 # the number of tokens in the input sequence
+batch_size = 16 # how many independent samples to process at once
+block_size = 64 # the number of tokens in the input sequence
 max_iters = 5000 # number of iterations to train for
 eval_interval = 500 # how often to evaluate the model
 learning_rate = 3e-4
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 eval_iters = 200 # how many iterations to evaluate for
-n_embd = 384  # the size of the embedding dimension
-n_head = 6 # the number of heads in the multiheadattention models
+n_embd = 192  # the size of the embedding dimension
+n_head = 3 # the number of heads in the multiheadattention models
 # head_size = 64, which is standard <- n_embd // n_head
 n_layer = 6 # the number of blocks in the model
 dropout = 0.2 # the dropout probability
