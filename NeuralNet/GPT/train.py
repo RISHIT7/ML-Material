@@ -18,7 +18,8 @@ torch.manual_seed(1337) # for reproducibility
 
 # below is the link to the data
 # !wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
-with open(r".\NeuralNet\GPT\input.txt", 'r') as f:
+# with open(r".\NeuralNet\GPT\input.txt", 'r') as f: # for Windows
+with open(r"./NeuralNet/GPT/input.txt", 'r') as f: # for codespace
     text = f.read()
 
 # here are all the unique characters that occur in the text
@@ -64,6 +65,17 @@ def estimate_loss(model):
 # super simple bigram model
 torch.manual_seed(1337)
 
+class FeedForward(nn.Module):
+    def __init__(self, n_embd):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(n_embd, n_embd),
+            nn.ReLU(),
+        )
+    
+    def forward(self, x):
+        return self.net(x)
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads, head_size):
         super().__init__()
@@ -93,6 +105,19 @@ class Head(nn.Module):
         out = wei @ V # (B, T, head_size)
         return out
 
+class Block(nn.Module):
+    def __init__(self, n_embd, n_head):
+        # n_embd is the embedding size, n_head is the number of heads
+        super().__init__()
+        head_size = n_embd // n_head
+        self.sa = MultiHeadAttention(n_head, head_size)
+        self.ffwd = FeedForward(n_embd)
+    
+    def forward(self, idx, targets = None):
+        x = self.sa(idx)
+        x = self.ffwd(x)
+        return x
+
 class BigramLanguageModel(nn.Module): # inherting from nn.Module
     
     def __init__(self):
@@ -105,6 +130,9 @@ class BigramLanguageModel(nn.Module): # inherting from nn.Module
         # creating a head 
         # self.sa_head = Head(n_embd) # self attention head
         self.sa_head = MultiHeadAttention(num_heads = 4, head_size = n_embd // 4) # multihead attention head (4 heads, each with n_embd // 4 size
+        # feed forward layer
+        self.ffwd = FeedForward(n_embd)
+        
     
     def forward(self, idx, targets = None):
         B, T = idx.shape # batch_size, and block_size (context size)
@@ -124,6 +152,7 @@ class BigramLanguageModel(nn.Module): # inherting from nn.Module
         # holds not just the token embeddings but also the positional embeddings
         x = tok_emb + pos_emb # (B, T, C)
         x = self.sa_head(x) # (B, T, head_size)
+        x = self.ffwd(x) # (B, T, head_size)
         logits = self.lm_head(x) # (B, T, vocab_size)
         
         # training mode
