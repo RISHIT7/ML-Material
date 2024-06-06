@@ -2,3 +2,4 @@ transformers
 langchain
 langchain-huggingface
 langchain_community
+streamlit
