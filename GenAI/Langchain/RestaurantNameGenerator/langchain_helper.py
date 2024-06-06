@@ -18,19 +18,19 @@ def generate_restaurant_name_and_items(cuisine):
         input_variables = ['cuisine'],
         template = "I want to open a new restaurant for {cuisine} cuisine. Can you suggest ONLY ONE name for my restaurant?, Give only name, nothing else!"
     )
-    
-    chain = prompt_template_name | model
-    name = chain.invoke({'cuisine': cuisine})
-    
+
+    chain_name = prompt_template_name | model
+    name = chain_name.invoke({'cuisine': cuisine})
+
     # Chain 2: Menu items
-    prompt_template_name = PromptTemplate(
-        input_variables= ['restaurant_name'],
-        template = "Suggest some menu items for {restaurant_name} No sentence, only name. Return it as a comma seperated string"
+    prompt_template_items = PromptTemplate(
+        input_variables=['restaurant_name'],
+        template="Suggest some menu items for {restaurant_name} No sentence, only name. Return it as a comma separated string"
     )
-    
-    chain = prompt_template_name | model
-    menu_items = chain.invoke({'restaurant_name': cuisine})
-    
+
+    chain_items = prompt_template_items | model
+    menu_items = chain_items.invoke({'restaurant_name': name})
+
     return {
         'restaurant_name': name,
         'menu_items': menu_items
